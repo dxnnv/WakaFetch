@@ -6,6 +6,7 @@ import { makeStatsRoute } from "./routes.js";
 
 export const app = express();
 const PORT = Number(process.env.PORT ?? 8080);
+const BASE_PATH = process.env.BASE_PATH ?? "/wakatime";
 
 app.disable("x-powered-by");
 app.use(helmet({ contentSecurityPolicy: false }));
