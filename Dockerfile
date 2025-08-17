@@ -17,4 +17,5 @@ COPY --from=builder /app/dist ./dist
 COPY .env.example ./
 USER node
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -qO- http://localhost:8080/healthz || exit 1
 CMD ["node", "dist/server.js"]
