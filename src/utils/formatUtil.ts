@@ -44,9 +44,15 @@ export function toLocalDateTime(iso: string | null | undefined): string | null {
   return DATE_FMT.format(d).replace(",", "");
 }
 
-export function toShortDate(yyyy_mm_dd: string | null | undefined): string | null {
-  if (!yyyy_mm_dd) return null;
-  const d = new Date(`${yyyy_mm_dd}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return yyyy_mm_dd;
-  return DATE_FMT.format(d).replace(",", "");
+export function toShortDate(ymdLike: string | null | undefined): string | null {
+  if (!ymdLike) return null;
+  
+  const ymd = ymdLike.split("T")[0];
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!m) return ymdLike;
+
+  const [, y, mo, d] = m;
+  const yy = y.slice(2);
+
+  return `${parseInt(mo, 10)}/${parseInt(d, 10)}/${yy}`;
 }
