@@ -22,9 +22,6 @@ PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
 
-# Logging path
-ReadWritePaths=/var/log/wakafetch
-
 # Resource hints (optional)
 # MemoryMax=300M
 
