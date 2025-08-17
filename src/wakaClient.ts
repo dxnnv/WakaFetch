@@ -15,20 +15,6 @@ type SummariesResp = { data?: Array<{
   range?: { date?: string };
 }> };
 
-type StatsResp = {
-  data?: {
-    best_day?: { date?: string; text?: string; total_seconds?: number };
-    daily_average?: number;
-    human_readable_daily_average?: string;
-    human_readable_total?: string;
-    total_seconds?: number;
-    languages?: Array<{ name: string; total_seconds: number; percent?: number }>;
-    projects?: Array<{ name: string; total_seconds: number; percent?: number }>;
-    is_up_to_date?: boolean;
-    modified_at?: string;
-  };
-};
-
 async function fetchJSON<T>(url: string): Promise<{ status: number; body: T }> {
   const res = await fetch(url, { headers: authHeaders });
   let body: any = null;
@@ -116,7 +102,7 @@ export async function fetchStats(timeframe: ApiTimeframe): Promise<NormalizedSta
   );
   const secs = body.data?.total_seconds ?? null;
   const avg = body.data?.daily_average ?? null;
-  
+
   return {
     timeframe: "all_time",
     fetchedAt: new Date().toISOString(),

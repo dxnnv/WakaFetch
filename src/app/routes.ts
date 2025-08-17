@@ -1,0 +1,54 @@
+import type { Handler, Request, Response } from "express";
+import { TIMEFRAMES, parseTimeframe, STAT_KEYS, type ApiTimeframe, type StatKey } from "../types.js";
+import { fetchStats } from "../wakaClient.js";
+import { dumpAll, getFromCache, isStale, setCache, shouldRefreshOnRequest } from "../cache.js";
+import { Formatters } from "../formatting/formatters.js";
+
+const safeLog = (...args: unknown[]) => {
+  if (process.env.NODE_ENV !== "production") console.log(...args);
+};
+
+async function ensureCached(tf: ApiTimeframe): Promise<void> {
+  const entry = getFromCache(tf);
+  if (!entry || shouldRefreshOnRequest(entry)) {
+    const fresh = await fetchStats(tf);
+    setCache(tf, fresh);
+  }
+}
+
+export function makeStatsRoute<Bundle = any, MapOut = any>(fmt: Formatters<Bundle, MapOut>): Handler {
+  return async (req: Request, res: Response) => {
+    const timeframe = parseTimeframe(req.query.timeframe as string | undefined);
+    const statRaw = (req.query.stat as string | undefined)?.toLowerCase() as StatKey | undefined;
+
+    if (statRaw && !STAT_KEYS.includes(statRaw))
+      return res.status(400).json({ error: `Unknown stat '${statRaw}'. Valid: ${STAT_KEYS.join(", ")}` });
+
+
+    try {
+      if (timeframe) {
+        await ensureCached(timeframe);
+        const entry = getFromCache(timeframe);
+        if (!entry) return res.status(502).json({ error: "Failed to load stats." });
+
+        if (isStale(entry))
+          try {
+            setCache(timeframe, await fetchStats(timeframe));
+          } catch {}
+
+        const formatted = fmt.formatBundle(getFromCache(timeframe)!.value);
+        if (!statRaw) return res.json(formatted);
+
+        const picked = fmt.pick(formatted, statRaw);
+        return res.json(picked);
+      }
+
+      await Promise.allSettled(TIMEFRAMES.map(tf => ensureCached(tf).catch(() => undefined)));
+      const mapOut = fmt.formatMap(dumpAll());
+      return res.json(mapOut);
+    } catch (err) {
+      safeLog(err);
+      return res.status(500).json({ error: "Unexpected server error." });
+    }
+  };
+}
