@@ -16,7 +16,7 @@ EnvironmentFile=/opt/wakafetch/.env
 Environment=NODE_ENV=production
 
 # Start the built server
-ExecStart=/usr/bin/node dist/server.js
+ExecStart=/usr/bin/node dist/app/server.js
 Restart=on-failure
 RestartSec=5s
 
