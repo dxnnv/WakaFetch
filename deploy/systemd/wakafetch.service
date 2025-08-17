@@ -1,0 +1,32 @@
+[Unit]
+Description=WakaFetch (WakaTime stats API)
+After=network.target
+
+[Service]
+Type=simple
+User=wakafetch
+Group=wakafetch
+
+WorkingDirectory=/opt/wakafetch
+
+EnvironmentFile=/opt/wakafetch/.env
+Environment=NODE_ENV=production
+
+# Start the built server
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=5s
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+# Logging path
+ReadWritePaths=/var/log/wakafetch
+
+# Resource hints (optional)
+# MemoryMax=300M
+
+[Install]
+WantedBy=multi-user.target
