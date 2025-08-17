@@ -78,14 +78,13 @@ jobs:
   integration-live:
     runs-on: ubuntu-latest
     needs: build-and-smoke
-    if: ${{ secrets.WAKATIME_API_KEY != '' }}
+    environment: production
     env:
       NODE_ENV: production
       BASE_PATH: ${{ vars.BASE_PATH || '/wakafetch' }}
       PORT: ${{ vars.PORT || '23115' }}
       TIMEZONE: ${{ vars.TIMEZONE || 'America/New_York' }}
       
-      WAKATIME_AUTH: api_key
       WAKATIME_API_KEY: ${{ secrets.WAKATIME_API_KEY }}
       WAKATIME_USERNAME: ${{ secrets.WAKATIME_USERNAME || 'current' }}
       
@@ -104,6 +103,7 @@ jobs:
       - run: npm run build
 
       - name: Start server
+        if: ${{ env.WAKATIME_API_KEY != '' }}
         run: |
           node dist/app/server.js & echo $! > server.pid
           for i in {1..60}; do
@@ -112,10 +112,12 @@ jobs:
           done
 
       - name: Live call (formatted, this_month)
+        if: ${{ env.WAKATIME_API_KEY != '' }}
         run: |
           curl -fsS "http://127.0.0.1:${PORT}${BASE_PATH}/stats?timeframe=this_month" | jq -e '.timeframe=="This Month"' >/dev/null
 
       - name: Live call (raw + stat pick)
+        if: ${{ env.WAKATIME_API_KEY != '' }}
         run: |
           curl -fsS "http://127.0.0.1:${PORT}${BASE_PATH}/stats/raw?timeframe=today&stat=total_time" | jq -e '.total_time != null' >/dev/null
 
