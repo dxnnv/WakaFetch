@@ -19,7 +19,13 @@ async function ensureCached(tf: ApiTimeframe): Promise<void> {
 export function makeStatsRoute<Bundle = any, MapOut = any>(fmt: Formatters<Bundle, MapOut>): Handler {
   return async (req: Request, res: Response) => {
     const timeframe = parseTimeframe(req.query.timeframe as string | undefined);
-    const statRaw = (req.query.stat as string | undefined)?.toLowerCase() as StatKey | undefined;
+    if (req.query.timeframe && !timeframe)
+      return res.status(400).json({ error: "Invalid timeframe." });
+
+
+    const stat = parseStat(req.query.stat as string | undefined) ?? undefined;
+    if (req.query.stat && !stat)
+      return res.status(400).json({ error: `Unknown stat. Valid: ${STAT_KEYS.join(", ")}` });
 
     if (statRaw && !STAT_KEYS.includes(statRaw))
       return res.status(400).json({ error: `Unknown stat '${statRaw}'. Valid: ${STAT_KEYS.join(", ")}` });

@@ -41,3 +41,9 @@ export interface NormalizedStatBundle {
   languages_used: string[];
   languages_by_usage: Array<{ name: string; percent: number; seconds: number }>;
 }
+
+export function parseStat(input?: string): StatKey | null {
+  if (!input) return null;
+  const k = input.trim().toLowerCase();
+  return (STAT_KEYS as readonly string[]).includes(k) ? (k as StatKey) : null;
+}
