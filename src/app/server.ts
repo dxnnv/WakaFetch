@@ -9,8 +9,8 @@ import { makeStatsRoute } from "./routes.js";
 
 export const app = express();
 const PORT = Number(process.env.PORT ?? 23116);
-const SOCK = process.env.SOCKET_PATH
-const BASE_PATH = process.env.BASE_PATH ?? "/wakatime";
+const SOCK = process.env.SOCKET_PATH;
+const BASE_PATH = process.env.BASE_PATH ?? "/wakafetch";
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -50,7 +50,7 @@ if (SOCK) {
 } else server = app.listen(PORT, () => onListening(`:${PORT}`));
 
 function shutdown(sig: string) {
-  console.log(`${sig} received, shutting down…`);
+  console.log(`${sig} received, shutting down...`);
   server.close(() => {
     if (SOCK) { 
       try { fs.unlinkSync(SOCK);

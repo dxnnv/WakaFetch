@@ -1,14 +1,14 @@
 import type { Handler, Request, Response } from "express";
-import { TIMEFRAMES, parseTimeframe, STAT_KEYS, type ApiTimeframe, type StatKey } from "../types.js";
+import { TIMEFRAMES, parseTimeframe, parseStat, STAT_KEYS, type ApiTimeframe, type NormalizedStatBundle, type StatKey } from "../types.js";
 import { fetchStats } from "../wakaClient.js";
 import { dumpAll, getFromCache, isStale, setCache, shouldRefreshOnRequest } from "../cache.js";
-import { Formatters } from "../formatting/formatters.js";
+import type { Formatters } from "../formatting/formatters.js";
 
 const safeLog = (...args: unknown[]) => {
-  if (process.env.NODE_ENV !== "production") console.log(...args);
+  if (process.env.NODE_ENV !== "production") console.log(...args.map(a => (a instanceof Error ? a.stack ?? a.message : a)));
 };
 
-const inflight = new Map<ApiTimeframe, Promise<any>>():
+const inflight = new Map<ApiTimeframe, Promise<NormalizedStatBundle>>();
 
 async function ensureCached(tf: ApiTimeframe): Promise<void> {
   const entry = getFromCache(tf);
@@ -42,7 +42,9 @@ export function makeStatsRoute<Bundle = any, MapOut = any>(fmt: Formatters<Bundl
         if (isStale(entry))
           try {
             setCache(timeframe, await fetchStats(timeframe));
-          } catch {}
+          } catch (e) {
+            safeLog("Refresh failed:", e);
+          }
 
         const formatted = fmt.formatBundle(getFromCache(timeframe)!.value);
         if (!stat) return res.json(formatted);
@@ -51,7 +53,7 @@ export function makeStatsRoute<Bundle = any, MapOut = any>(fmt: Formatters<Bundl
         return res.json(picked);
       }
 
-      await Promise.allSettled(TIMEFRAMES.map(tf => ensureCached(tf).catch(() => undefined)));
+      await Promise.allSettled(TIMEFRAMES.map(tf => ensureCached(tf)));
       const mapOut = fmt.formatMap(dumpAll());
       return res.json(mapOut);
     } catch (err) {
