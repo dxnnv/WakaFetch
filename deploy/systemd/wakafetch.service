@@ -9,6 +9,9 @@ Group=wakafetch
 
 WorkingDirectory=/opt/wakafetch
 
+RuntimeDirectory=wakafetch
+Environment=SOCKET_PATH=/run/wakafetch/app.sock
+
 EnvironmentFile=/opt/wakafetch/.env
 Environment=NODE_ENV=production
 
