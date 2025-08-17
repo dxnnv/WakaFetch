@@ -8,12 +8,18 @@ const safeLog = (...args: unknown[]) => {
   if (process.env.NODE_ENV !== "production") console.log(...args);
 };
 
+const inflight = new Map<ApiTimeframe, Promise<any>>():
+
 async function ensureCached(tf: ApiTimeframe): Promise<void> {
   const entry = getFromCache(tf);
-  if (!entry || shouldRefreshOnRequest(entry)) {
-    const fresh = await fetchStats(tf);
-    setCache(tf, fresh);
+  if (entry && !shouldRefreshOnRequest(entry)) return;
+  let promise = inflight.get(tf);
+  if (!promise) {
+    promise = fetchStats(tf).finally(() => inflight.delete(tf));
+    inflight.set(tf, promise);
   }
+  const fresh = await promise;
+  setCache(tf, fresh)
 }
 
 export function makeStatsRoute<Bundle = any, MapOut = any>(fmt: Formatters<Bundle, MapOut>): Handler {
@@ -27,10 +33,6 @@ export function makeStatsRoute<Bundle = any, MapOut = any>(fmt: Formatters<Bundl
     if (req.query.stat && !stat)
       return res.status(400).json({ error: `Unknown stat. Valid: ${STAT_KEYS.join(", ")}` });
 
-    if (statRaw && !STAT_KEYS.includes(statRaw))
-      return res.status(400).json({ error: `Unknown stat '${statRaw}'. Valid: ${STAT_KEYS.join(", ")}` });
-
-
     try {
       if (timeframe) {
         await ensureCached(timeframe);
@@ -43,9 +45,9 @@ export function makeStatsRoute<Bundle = any, MapOut = any>(fmt: Formatters<Bundl
           } catch {}
 
         const formatted = fmt.formatBundle(getFromCache(timeframe)!.value);
-        if (!statRaw) return res.json(formatted);
+        if (!stat) return res.json(formatted);
 
-        const picked = fmt.pick(formatted, statRaw);
+        const picked = fmt.pick(formatted, stat);
         return res.json(picked);
       }
 
