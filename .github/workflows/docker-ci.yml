@@ -1,0 +1,41 @@
+name: Docker CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  docker-build-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment: production 
+    env:
+      BASE_PATH: ${{ vars.BASE_PATH || '/wakafetch' }}
+      PORT: 8080
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: |
+          docker build -t wakafetch:test .
+
+      - name: Run container
+        run: |
+          docker run -d --rm --name wakafetch -e NODE_ENV=production -e BASE_PATH=${BASE_PATH} -p 127.0.0.1:18080:${PORT} wakafetch:test
+          for i in {1..40}; do
+            curl -fsS "http://127.0.0.1:18080${BASE_PATH}/healthz" && break
+            sleep 1
+          done
+
+      - name: Container smoke test
+        run: |
+          curl -fsS "http://127.0.0.1:18080${BASE_PATH}/stats?timeframe=last_7_days" | jq -e '.languages_by_usage|type=="array"' >/dev/null
+
+      - name: Stop container
+        if: always()
+        run: |
+          docker logs wakafetch || true
+          docker stop wakafetch || true

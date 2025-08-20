@@ -15,17 +15,30 @@ type SummariesResp = { data?: Array<{
   range?: { date?: string };
 }> };
 
-async function fetchJSON<T>(url: string): Promise<{ status: number; body: T }> {
-  const res = await fetch(url, { headers: authHeaders });
-  let body: any = null;
-  try { body = await res.json(); } catch {}
-  if (!res.ok) {
-    if (process.env.NODE_ENV !== "production") {
-      console.error(`[WakaFetch] ${res.status} ${res.statusText} for ${url}`);
-      console.error("Body:", typeof body === "object" ? JSON.stringify(body) : body);
+const UA = `WakaFetch/${process.env.npm_package_version ?? "dev"} (+https://github.com/dxnnv/WakaFetch)`;
+
+async function fetchJSON<T>(url: string, { timeout = 10_000, retries = 2 }: { timeout?: number; retries?: number } = {}) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeout);
+    try {
+      const res = await fetch(url, {
+        headers: { ...authHeaders, "User-Agent": UA },
+        signal: controller.signal,
+      });
+      if (res.status === 429 || res.status >= 500) {
+        const retryAfter = Number(res.headers.get("retry-after") || 0);
+        const waitMs = retryAfter > 0 ? retryAfter * 1000 : Math.min(2000, 250 * 2 ** attempt);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      const body = await res.json().catch(() => ({}));
+      return { status: res.status, body: body as T };
+    } finally {
+      clearTimeout(t);
     }
   }
-  return { status: res.status, body: body as T };
+  throw new Error("WakaTime request failed after retries");
 }
 
 async function fetchViaSummaries(rangeLabel: string, tf: ApiTimeframe): Promise<NormalizedStatBundle> {

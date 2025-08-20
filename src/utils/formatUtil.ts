@@ -1,4 +1,4 @@
-import { ApiTimeframe } from "../types";
+import type { ApiTimeframe } from "../types.js";
 
 const TIMEZONE = process.env.TIMEZONE || "America/New_York";
 const DATE_FMT = new Intl.DateTimeFormat("en-US", {
