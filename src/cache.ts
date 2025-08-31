@@ -1,5 +1,4 @@
-import { ApiTimeframe, TIMEFRAMES } from "./types.js";
-import type { NormalizedStatBundle } from "./types.js";
+import { ApiTimeframe, TIMEFRAMES, type NormalizedStatBundle } from "./types.js";
 
 type Entry = { value: NormalizedStatBundle; updatedAt: number };
 const store = new Map<ApiTimeframe, Entry>();
@@ -19,7 +18,7 @@ export function isStale(e: Entry) {
 }
 
 export function shouldRefreshOnRequest(e?: Entry) {
-  return !e ||  Date.now() - e.updatedAt > MIN_REFRESH_MS;
+  return !e || Date.now() - e.updatedAt > MIN_REFRESH_MS;
 }
 
 export function setCache(tf: ApiTimeframe, value: NormalizedStatBundle) {
@@ -27,6 +26,7 @@ export function setCache(tf: ApiTimeframe, value: NormalizedStatBundle) {
 }
 
 export function dumpAll(): Record<ApiTimeframe, NormalizedStatBundle | null> {
-  return Object.fromEntries(TIMEFRAMES.map(tf => [tf, store.get(tf)?.value ?? null])) as
-    Record<ApiTimeframe, NormalizedStatBundle | null>;
+  return Object.fromEntries(
+    TIMEFRAMES.map((tf) => [tf, store.get(tf)?.value ?? null]),
+  ) as Record<ApiTimeframe, NormalizedStatBundle | null>;
 }

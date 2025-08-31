@@ -1,23 +1,73 @@
 import "dotenv/config";
-import express from "express";
+import fs from "node:fs";
+import path from "node:path";
+import express, { type Request, type Response } from "express";
 import helmet from "helmet";
+import compression from "compression";
+import rateLimit from "express-rate-limit";
 import { PrettyFormatters, RawFormatters } from "../formatting/formatters.js";
 import { makeStatsRoute } from "./routes.js";
 
 export const app = express();
-const PORT = Number(process.env.PORT ?? 8080);
-const BASE_PATH = process.env.BASE_PATH ?? "/wakatime";
+const PORT = Number(process.env.PORT ?? 23116);
+const SOCK = process.env.SOCKET_PATH;
+const BASE_PATH = process.env.BASE_PATH ?? "/wakafetch";
 
 app.disable("x-powered-by");
-app.use(helmet({ contentSecurityPolicy: false }));
-
+app.set("trust proxy", 1);
 app.set("etag", "strong");
 app.set("json spaces", 0);
+app.use(compression());
+app.use(helmet({ contentSecurityPolicy: false }));
 
-app.get("/wakatime/stats/raw", makeStatsRoute(RawFormatters));
+const router = express.Router();
+router.get("/stats/raw", makeStatsRoute(RawFormatters));
+router.get("/stats", makeStatsRoute(PrettyFormatters));
+router.get("/healthz", (_req: Request, res: Response) => res.json({ ok: true }));
+router.get("/version", (_req: Request, res: Response) =>
+  res.json({
+    version: process.env.npm_package_version ?? "dev",
+    commit: process.env.GIT_SHA ?? null,
+  }),
+);
 
-app.get("/wakatime/stats", makeStatsRoute(PrettyFormatters));
+router.use(
+  rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+);
 
-app.get("/healthz", (_req, res) => res.json({ ok: true }));
+app.use(BASE_PATH, router);
 
-app.listen(PORT, () => console.log(`WakaFetch listening on :${PORT}`));
+let server: import("http").Server;
+function onListening(where: string) {
+  console.log(`[${new Date().toISOString()}] listening on ${where} at ${BASE_PATH}`);
+}
+
+if (SOCK) {
+  try {
+    fs.mkdirSync(path.dirname(SOCK), { recursive: true });
+    if (fs.existsSync(SOCK)) fs.unlinkSync(SOCK);
+  } catch {}
+  server = app.listen(SOCK, () => {
+    try { fs.chmodSync(SOCK, 0o660); } catch {}
+    onListening(SOCK!);
+  });
+} else {
+  server = app.listen(PORT, () => onListening(`:${PORT}`));
+}
+
+function shutdown(sig: string) {
+  console.log(`${sig} received, shutting down...`);
+  server.close(() => {
+    if (SOCK) { try { fs.unlinkSync(SOCK); } catch {} }
+    process.exit(0);
+  });
+  const killer = setTimeout(() => process.exit(1), 10_000) as unknown as NodeJS.Timeout;
+  killer.unref();
+}
+
+(["SIGINT", "SIGTERM"] as const).forEach((s) => process.on(s, () => shutdown(s)));

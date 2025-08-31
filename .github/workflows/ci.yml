@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+    inputs:
+      run_live:
+        description: "Run live integration test?"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20.x]
+    env:
+      NODE_ENV: production
+      BASE_PATH: /wakafetch
+      PORT: 23116
+      TIMEZONE: America/New_York
+      WAKATIME_AUTH: api_key
+      WAKATIME_API_KEY: ""
+      WAKATIME_USERNAME: current
+      CACHE_TTL_HOURS: 6
+      REFRESH_MIN_AGE_MINUTES: 10
+      MIN_LANG_SECONDS: 60
+      REWEIGHT_FILTERED_PERCENTS: 0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install deps (with dev)
+        env:
+          NODE_ENV: development
+        id: deps
+        run: |
+          set -e
+          if npm ci --no-audit --no-fund; then
+            echo "changed=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::warning::npm ci failed; regenerating lockfile with 'npm install'..."
+          npm install --no-audit --no-fund
+          if git diff --name-only | grep -q '^package-lock\.json$'; then
+            echo "changed=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Start server
+        run: |
+          node dist/app/server.js > server.log 2>&1 & echo $! > server.pid
+
+          for i in {1..60}; do
+            if curl -fs "http://127.0.0.1:${PORT}${BASE_PATH}/healthz" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl -fsS "http://127.0.0.1:${PORT}${BASE_PATH}/healthz" | jq -e '.ok==true' > /dev/null
+
+      - name: Smoke test (version)
+        run: |
+          curl -fsS "http://127.0.0.1:${PORT}${BASE_PATH}/version" | jq -e '.version != null' >/dev/null
+
+      - name: Upload updated lockfile (PR only)
+        if: ${{ github.event_name == 'pull_request' && steps.deps.outputs.changed == '1' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock.json
+          path: package-lock.json
+
+      - name: Auto-commit updated lockfile (push to master)
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.deps.outputs.changed == '1' }}
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'ci: update package-lock.json'
+          file_pattern: package-lock.json
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then kill $(cat server.pid) || true; fi
+
+  integration-live:
+    runs-on: ubuntu-latest
+    needs: build-and-smoke
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' || (github.event_name == 'workflow_dispatch' && inputs.run_live == true) }}
+    environment: production
+    env:
+      NODE_ENV: production
+      BASE_PATH: ${{ vars.BASE_PATH || '/wakafetch' }}
+      PORT: ${{ vars.PORT || '23116' }}
+      TIMEZONE: ${{ vars.TIMEZONE || 'America/New_York' }}
+      WAKATIME_AUTH: api_key
+      WAKATIME_API_KEY: ${{ secrets.WAKATIME_API_KEY }}
+      WAKATIME_USERNAME: ${{ secrets.WAKATIME_USERNAME || 'current' }}
+      CACHE_TTL_HOURS: 6
+      REFRESH_MIN_AGE_MINUTES: 0
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          
+      - name: Install deps (with dev)
+        env:
+          NODE_ENV: development
+        run: npm ci --no-audit --no-fund
+
+      - run: npm run build
+ 
+      - name: Start server
+        run: |
+          node dist/app/server.js > server.log 2>&1 & echo $! > server.pid
+          for i in {1..40}; do
+            curl -fsS "http://127.0.0.1:${PORT}${BASE_PATH}/healthz" && break
+            sleep 1
+          done
+          curl -fsS "http://127.0.0.1:${PORT}${BASE_PATH}/healthz" | jq -e '.ok==true'
+  
+      - name: Live call (formatted, this_month)
+        run: |
+          curl -fsS "http://127.0.0.1:${PORT}${BASE_PATH}/stats?timeframe=this_month" \
+          | jq -e '.timeframe == "This Month"' >/dev/null
+
+      - name: Live call (raw + stat pick)
+        run: |
+          curl -fsS "http://127.0.0.1:${PORT}${BASE_PATH}/stats/raw?timeframe=last_7_days" | jq -e '.timeframe == "last_7_days"' >/dev/null
+
+      - name: Dump server log on failure
+        if: failure()
+        run: |
+          echo "----- server.log -----"
+          cat server.log || true
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then kill $(cat server.pid) || true; fi
