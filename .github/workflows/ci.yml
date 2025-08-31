@@ -116,7 +116,7 @@ jobs:
     env:
       NODE_ENV: production
       BASE_PATH: ${{ vars.BASE_PATH || '/wakafetch' }}
-      PORT: ${{ vars.PORT || '23115' }}
+      PORT: ${{ vars.PORT || '23116' }}
       TIMEZONE: ${{ vars.TIMEZONE || 'America/New_York' }}
       WAKATIME_AUTH: api_key
       WAKATIME_API_KEY: ${{ secrets.WAKATIME_API_KEY }}
