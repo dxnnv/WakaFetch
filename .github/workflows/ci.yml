@@ -52,7 +52,7 @@ jobs:
         run: npm ci
 
       - name: Typecheck
-        run: npx -y typescript@5.6.0 -p tsconfig.json --noEmit
+        run: npm run typecheck
 
       - name: Lint
         if: ${{ hashFiles('.eslintrc*', 'eslint.config.*') != '' }}
