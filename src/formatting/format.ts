@@ -14,6 +14,7 @@ type LangAgg = { name: string; seconds: number; percent: number };
 function filterLanguages(items: LangAgg[]): LangAgg[] {
   const filtered = (items ?? []).filter((x) => (x?.seconds ?? 0) >= MIN_LANG_SECONDS);
   if (!REWEIGHT_FILTERED_PERCENTS) return filtered;
+
   const total = filtered.reduce((a, b) => a + (b.seconds ?? 0), 0) || 1;
   return filtered.map((x) => ({ ...x, percent: (x.seconds / total) * 100 }));
 }
@@ -65,9 +66,7 @@ export function formatBundlePretty(b: NormalizedStatBundle): FormattedStatBundle
   };
 }
 
-export function formatMapPretty(
-  m: Record<ApiTimeframe, NormalizedStatBundle | null>,
-): Record<ApiTimeframe, FormattedStatBundle | null> {
+export function formatMapPretty(m: Record<ApiTimeframe, NormalizedStatBundle | null>,): Record<ApiTimeframe, FormattedStatBundle | null> {
   const out: Partial<Record<ApiTimeframe, FormattedStatBundle | null>> = {};
   for (const [k, v] of Object.entries(m) as [ApiTimeframe, NormalizedStatBundle | null][]) {
     out[k] = v ? formatBundlePretty(v) : null;
