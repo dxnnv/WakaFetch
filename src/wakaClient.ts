@@ -4,11 +4,12 @@ const BASE = process.env.WAKATIME_BASE_URL ?? "https://api.wakatime.com/api/v1";
 const USER = process.env.WAKATIME_USERNAME ?? "current";
 const API_KEY = process.env.WAKATIME_API_KEY || "";
 
-if (!API_KEY) throw new Error("WAKATIME_API_KEY missing");
+function getAuthHeaders() {
+  if (!API_KEY) return null;
+  return { Authorization: `Basic ${Buffer.from(API_KEY + ":").toString("base64")}` as const };
+}
 
-const authHeaders = {
-  Authorization: `Basic ${Buffer.from(API_KEY).toString("base64")}`,
-} as const;
+const auth = getAuthHeaders();
 
 const UA = `WakaFetch/${process.env.npm_package_version ?? "dev"} (+https://github.com/dxnnv/WakaFetch)`;
 
@@ -18,7 +19,7 @@ async function fetchJSON<T>(url: string, { timeout = 10_000, retries = 2 }: { ti
     const t = setTimeout(() => controller.abort(), timeout);
     try {
       const res = await fetch(url, {
-        headers: { ...authHeaders, "User-Agent": UA },
+        headers: { ...(auth ?? {}), "User-Agent": UA },
         signal: controller.signal,
       });
       if (res.status === 429 || res.status >= 500) {
