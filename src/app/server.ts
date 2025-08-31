@@ -1,6 +1,7 @@
 import "dotenv/config";
 import fs from "node:fs";
-import express from "express";
+import path from "node:path";
+import express, { type Request, type Response } from "express";
 import helmet from "helmet";
 import compression from "compression";
 import rateLimit from "express-rate-limit";
@@ -22,42 +23,51 @@ app.use(helmet({ contentSecurityPolicy: false }));
 const router = express.Router();
 router.get("/stats/raw", makeStatsRoute(RawFormatters));
 router.get("/stats", makeStatsRoute(PrettyFormatters));
-router.get("/healthz", (_req, res) => res.json({ ok: true }));
-router.get("/version", (_req, res) => res.json({
-  version: process.env.npm_package_version ?? "dev",
-  commit: process.env.GIT_SHA ?? null,
-}));
+router.get("/healthz", (_req: Request, res: Response) => res.json({ ok: true }));
+router.get("/version", (_req: Request, res: Response) =>
+  res.json({
+    version: process.env.npm_package_version ?? "dev",
+    commit: process.env.GIT_SHA ?? null,
+  }),
+);
 
-router.use(rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false }));
+router.use(
+  rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+);
+
 app.use(BASE_PATH, router);
 
-let server: any;
+let server: import("http").Server;
 function onListening(where: string) {
   console.log(`[${new Date().toISOString()}] listening on ${where} at ${BASE_PATH}`);
 }
 
 if (SOCK) {
   try {
-    if (fs.existsSync(SOCK))
-      fs.unlinkSync(SOCK);
-    } catch {}
+    fs.mkdirSync(path.dirname(SOCK), { recursive: true });
+    if (fs.existsSync(SOCK)) fs.unlinkSync(SOCK);
+  } catch {}
   server = app.listen(SOCK, () => {
-    try { 
-      fs.chmodSync(SOCK, 0o766);
-    } catch {}
-    onListening(`unix:${SOCK}`);
+    try { fs.chmodSync(SOCK, 0o660); } catch {}
+    onListening(SOCK!);
   });
-} else server = app.listen(PORT, () => onListening(`:${PORT}`));
+} else {
+  server = app.listen(PORT, () => onListening(`:${PORT}`));
+}
 
 function shutdown(sig: string) {
   console.log(`${sig} received, shutting down...`);
   server.close(() => {
-    if (SOCK) { 
-      try { fs.unlinkSync(SOCK);
-    } catch {} }
+    if (SOCK) { try { fs.unlinkSync(SOCK); } catch {} }
     process.exit(0);
   });
-  setTimeout(() => process.exit(1), 10_000).unref();
+  const killer = setTimeout(() => process.exit(1), 10_000) as unknown as NodeJS.Timeout;
+  killer.unref();
 }
 
-["SIGINT","SIGTERM"].forEach(s => process.on(s as NodeJS.Signals, () => shutdown(s)));
+(["SIGINT", "SIGTERM"] as const).forEach((s) => process.on(s, () => shutdown(s)));

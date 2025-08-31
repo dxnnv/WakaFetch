@@ -2,7 +2,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
@@ -15,10 +15,11 @@ ENV PORT=23116
 ENV BASE_PATH=/wakafetch
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --no-audit --no-fund
 COPY --from=builder /app/dist ./dist
 COPY .env.example ./
+
 USER node
-EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -qO- http://localhost:8080/wakafetch/healthz || exit 1
-CMD ["node", "dist/server.js"]
+EXPOSE 23116
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["sh","-lc","wget -qO- http://127.0.0.1:${PORT}${BASE_PATH}/healthz || exit 1"]
+CMD ["node", "dist/app/server.js"]
