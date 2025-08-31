@@ -144,6 +144,7 @@ jobs:
             curl -fsS "http://127.0.0.1:${PORT}${BASE_PATH}/healthz" && break
             sleep 1
           done
+          curl -fsS "http://127.0.0.1:${PORT}${BASE_PATH}/healthz" | jq -e '.ok==true'
   
       - name: Live call (formatted, this_month)
         run: |
