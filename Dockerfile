@@ -21,5 +21,5 @@ COPY .env.example ./
 
 USER node
 EXPOSE 23116
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["sh","-lc","wget -qO- http://127.0.0.1:${PORT}${BASE_PATH}/healthz || exit 1"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD sh -lc 'wget -qO- "http://127.0.0.1:${PORT:-23116}${BASE_PATH:-/wakafetch}/healthz" >/dev/null || exit 1'
 CMD ["node", "dist/app/server.js"]

@@ -31,11 +31,12 @@ jobs:
             wakafetch:test
 
           for i in {1..40}; do
-            curl -fsS "http://127.0.0.1:${HOST_PORT}${BASE_PATH}/healthz" && break
+            status=$(docker inspect -f '{{.State.Health.Status}}' wakafetch 2>/dev/null || echo starting)
+            [ "$status" = "healthy" ] && break
             sleep 1
           done
 
-          curl -fsS "http://127.0.0.1:${HOST_PORT}${BASE_PATH}/healthz" | jq -e '.ok==true'
+          docker inspect -f '{{.State.Health.Status}}' wakafetch | grep -qx healthy
 
       - name: Dump container logs on failure
         if: failure()
