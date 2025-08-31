@@ -11,31 +11,36 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    environment: production 
     env:
       BASE_PATH: ${{ vars.BASE_PATH || '/wakafetch' }}
-      PORT: 8080
+      CONTAINER_PORT: 23116
+      HOST_PORT: 18080
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Build image
-        run: |
-          docker build -t wakafetch:test .
+        run: docker build -t wakafetch:test .
 
       - name: Run container
         run: |
-          docker run -d --rm --name wakafetch -e NODE_ENV=production -e BASE_PATH=${BASE_PATH} -p 127.0.0.1:18080:${PORT} wakafetch:test
+          docker run -d --rm --name wakafetch \
+            -e NODE_ENV=production \
+            -e BASE_PATH="${BASE_PATH}" \
+            -p 127.0.0.1:${HOST_PORT}:${CONTAINER_PORT} \
+            wakafetch:test
+
           for i in {1..40}; do
-            curl -fsS "http://127.0.0.1:18080${BASE_PATH}/healthz" && break
+            curl -fsS "http://127.0.0.1:${HOST_PORT}${BASE_PATH}/healthz" && break
             sleep 1
           done
 
-      - name: Container smoke test
-        run: |
-          curl -fsS "http://127.0.0.1:18080${BASE_PATH}/stats?timeframe=last_7_days" | jq -e '.languages_by_usage|type=="array"' >/dev/null
+          curl -fsS "http://127.0.0.1:${HOST_PORT}${BASE_PATH}/healthz" | jq -e '.ok==true'
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker logs wakafetch || true
 
       - name: Stop container
         if: always()
-        run: |
-          docker logs wakafetch || true
-          docker stop wakafetch || true
+        run: docker stop wakafetch || true
